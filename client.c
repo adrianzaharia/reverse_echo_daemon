@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <string.h>
@@ -8,10 +9,15 @@
 #define SHELL_TOK_BUFSIZE 64
 #define SHELL_TOK_DELIM " \t\r\n\a"
 
+int clientSocket;
+struct sockaddr_in serverAddr;
+socklen_t addr_size;
+
 /*
   Function Declarations for builtin shell commands:
  */
 int shell_send(char **args);
+int shell_connect(char **args);
 int shell_help(char **args);
 int shell_exit(char **args);
 
@@ -20,23 +26,64 @@ int shell_exit(char **args);
  */
 char *builtin_str[] = {
   "send",
+  "connect",
   "help",
   "exit"
 };
 
 int (*builtin_func[]) (char **) = {
   &shell_send,
+  &shell_connect,
   &shell_help,
   &shell_exit
 };
 
-int lsh_num_builtins() {
+int shell_num_builtins() {
   return sizeof(builtin_str) / sizeof(char *);
 }
 
 /*
   Builtin function implementations.
 */
+
+int shell_connect(char **args)
+{
+	if (args[1] == NULL) {
+		fprintf(stderr, "shell: expected ip argument to \"connect\"\n");
+	} else if (args[2] == NULL) {
+		fprintf(stderr, "shell: expected port argument to \"connect\"\n");
+	} else {
+		/*---- Create the socket. The three arguments are: ----*/
+		/* 1) Internet domain 2) Stream socket 3) Default protocol (TCP in this case) */
+		clientSocket = socket(PF_INET, SOCK_STREAM, 0);
+
+		/*---- Configure settings of the server address struct ----*/
+		/* Address family = Internet */
+		serverAddr.sin_family = AF_INET;
+		/* Set port number, using htons function to use proper byte order */
+		serverAddr.sin_port = htons(atoi(args[2]));
+		/* Set IP address to localhost */
+		serverAddr.sin_addr.s_addr = inet_addr(args[1]);
+		/* Set all bits of the padding field to 0 */
+		memset(serverAddr.sin_zero, '\0', sizeof serverAddr.sin_zero);
+
+		/*---- Connect the socket to the server using the address struct ----*/
+		addr_size = sizeof serverAddr;
+		if (connect(clientSocket, (struct sockaddr *) &serverAddr, addr_size) < 0) {
+			fprintf(stderr, "shell: failed to connect to %s %s\n", args[1], args[2]);
+			return 1;
+		}
+		#if 0
+		/*---- Read the message from the server into the buffer ----*/
+		recv(clientSocket, buffer, 1024, 0);
+
+		/*---- Print the received message ----*/
+		printf("Data received: %s",buffer);
+		#endif
+	}
+	return 1;
+}
+
 int shell_send(char **args)
 {
 	if (args[1] == NULL) {
@@ -56,7 +103,7 @@ int shell_help(char **args)
 	printf("Type program names and arguments, and hit enter.\n");
 	printf("Available commands:\n");
 
-	for (i = 0; i < lsh_num_builtins(); i++) {
+	for (i = 0; i < shell_num_builtins(); i++) {
 		printf("  %s\n", builtin_str[i]);
 	}
 
@@ -142,7 +189,7 @@ int shell_execute(char **args)
 		return 1;
 	}
 
-	for (i = 0; i < lsh_num_builtins(); i++) {
+	for (i = 0; i < shell_num_builtins(); i++) {
 		if (strcmp(args[0], builtin_str[i]) == 0) {
 			return (*builtin_func[i])(args);
 		}
@@ -168,38 +215,10 @@ void shell_loop(void) {
 }
 
 int main(){
-
-	int clientSocket;
 	char buffer[1024];
-	struct sockaddr_in serverAddr;
-	socklen_t addr_size;
 
 	// Run command loop.
 	shell_loop();
-#if 0
-	/*---- Create the socket. The three arguments are: ----*/
-	/* 1) Internet domain 2) Stream socket 3) Default protocol (TCP in this case) */
-	clientSocket = socket(PF_INET, SOCK_STREAM, 0);
 
-	/*---- Configure settings of the server address struct ----*/
-	/* Address family = Internet */
-	serverAddr.sin_family = AF_INET;
-	/* Set port number, using htons function to use proper byte order */
-	serverAddr.sin_port = htons(7891);
-	/* Set IP address to localhost */
-	serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
-	/* Set all bits of the padding field to 0 */
-	memset(serverAddr.sin_zero, '\0', sizeof serverAddr.sin_zero);
-
-	/*---- Connect the socket to the server using the address struct ----*/
-	addr_size = sizeof serverAddr;
-	connect(clientSocket, (struct sockaddr *) &serverAddr, addr_size);
-
-	/*---- Read the message from the server into the buffer ----*/
-	recv(clientSocket, buffer, 1024, 0);
-
-	/*---- Print the received message ----*/
-	printf("Data received: %s",buffer);
-#endif
 	return 0;
 }
