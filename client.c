@@ -72,7 +72,10 @@ int shell_connect(char **args)
 		if (connect(clientSocket, (struct sockaddr *) &serverAddr, addr_size) < 0) {
 			fprintf(stderr, "shell: failed to connect to %s %s\n", args[1], args[2]);
 			return 1;
+		} else {
+			printf("Connected.\n");
 		}
+
 		#if 0
 		/*---- Read the message from the server into the buffer ----*/
 		recv(clientSocket, buffer, 1024, 0);
