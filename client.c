@@ -115,7 +115,7 @@ int shell_send(char **args)
 			fprintf(stderr, "recv error \n");
 		}
 		message[len-1] = '\0'; //replace CR with '\0'
-		fprintf(stderr, "\n\nresponse %d bytes = '%s'\n", len, message);
+		fprintf(stderr, "\nresponse %d bytes = '%s'\n", len, message);
 	}
 	return 1;
 }

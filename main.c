@@ -81,21 +81,21 @@ void * socket_handler(void *arg)
 	char client_message[BUF_SIZE];
 	int len = 0;
 	int clientSocket = *((int *)arg);
-	fprintf(stderr, "Socket_handler started : client %x\n", 0);
+	fprintf(stderr, "Socket_handler started : client %x\n", clientSocket);
 	while(1) {
 		len = 0;
 		if ((len = recv(clientSocket , client_message , BUF_SIZE , 0)) < 0 ) {
 			fprintf(stderr, "recv error \n");
 		} else {
 			client_message[len-1] = '\0';
-			fprintf(stderr, "MESSAGE RECEIVED: '%s'\n", client_message);
+			fprintf(stderr, "[%#x]MESSAGE RECEIVED: '%s'\n", clientSocket, client_message);
 			char response[BUF_SIZE];
 
 			for (int i=0;i<len-1;i++) {
 				response[i]=client_message[len-2-i];
 			}
 			response[len-1] = '\0';
-			fprintf(stderr, "MESSAGE REPLY: '%s'\n", response);
+			fprintf(stderr, "[%#x]MESSAGE REPLY: '%s'\n", clientSocket, response);
 			response[len-1] = 0xD; //CR
 			send(clientSocket, response, len, 0);
 
@@ -188,9 +188,9 @@ int main(int argc,char **argv){
 	while(1) {
 
 		if(nr_of_threads < MAX_CONNECTIONS) {
-
+			fprintf(stderr, "before accept\n");
 			clientsockfd = accept(sockfd, (struct sockaddr *) &client_addr, &client_add_len);
-
+			fprintf(stderr, "Start thread for client %x\n", clientsockfd);
 			if (clientsockfd < 0) {
 				fprintf(stderr, "ERROR on accept");
 				continue;
@@ -200,7 +200,7 @@ int main(int argc,char **argv){
 			if( pthread_create(&tid[nr_of_threads], NULL, socket_handler, &clientsockfd) != 0 )
 				fprintf(stderr, "Failed to create thread\n");
 
-			pthread_join(tid[nr_of_threads],NULL);
+			//pthread_join(tid[nr_of_threads],NULL);
 			nr_of_threads++;
 		}
 
