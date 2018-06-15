@@ -6,6 +6,7 @@
 #define DEFAULT_CONFIG_FILENAME "/etc/reverse_echo.conf"
 #define BUF_SIZE 1024
 
+
 typedef struct
 {
 	int port;

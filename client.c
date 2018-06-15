@@ -5,6 +5,8 @@
 #include <string.h>
 #include <sys/wait.h>
 
+#include "config.h"
+
 #define SHELL_RL_BUFSIZE 1024
 #define SHELL_TOK_BUFSIZE 64
 #define SHELL_TOK_DELIM " \t\r\n\a"
@@ -75,7 +77,7 @@ int shell_connect(char **args)
 		} else {
 			printf("Connected.\n");
 		}
-
+		/* TODO add thread for listening messages from server */
 		#if 0
 		/*---- Read the message from the server into the buffer ----*/
 		recv(clientSocket, buffer, 1024, 0);
@@ -92,10 +94,28 @@ int shell_send(char **args)
 	if (args[1] == NULL) {
 		fprintf(stderr, "shell: expected argument to \"send\"\n");
 	} else {
-		/* client send data*/
-		/*if (chdir(args[1]) != 0) {
-			perror("shell");
-		}*/
+		char message[BUF_SIZE+1];
+		int size = strlen(args[1]);
+
+		if(size > BUF_SIZE) {
+			fprintf(stderr, "Message size too long\n");
+			return 1;
+		}
+
+		strncpy(message, args[1], BUF_SIZE);
+		message[size] = 0xD; //CR
+		fprintf(stderr, "sending %d bytes, ", size+1);
+		if (send(clientSocket, message ,  size+1 , 0) < 0) {
+			fprintf(stderr, "ERROR writing to socket\n");
+			return 1;
+		}
+		memset(message, 0x0, BUF_SIZE+1);
+		int len = 0;
+		if ((len = recv(clientSocket , message , BUF_SIZE , 0)) < 0 ) {
+			fprintf(stderr, "recv error \n");
+		}
+		message[len-1] = '\0'; //replace CR with '\0'
+		fprintf(stderr, "\n\nresponse %d bytes = '%s'\n", len, message);
 	}
 	return 1;
 }

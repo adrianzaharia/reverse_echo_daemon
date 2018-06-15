@@ -8,9 +8,12 @@
 
 #include <netinet/in.h>
 
+#include <pthread.h>
+
 #include "config.h"
 
 #define MAX_CONNECTIONS 10
+
 
 #define LOCK_FILE "/tmp/reverse_echo.lock"
 
@@ -43,6 +46,7 @@ int file_lock(int p_cmd) {
 
 void signal_handler(int sig){
 	switch(sig){
+	case SIGINT:
 	case SIGTERM:
 		exit(file_lock(F_ULOCK));
 		break;
@@ -67,6 +71,37 @@ void daemonize(){
 		exit(1);
 
 	signal(SIGTERM,signal_handler);
+	signal(SIGTERM,signal_handler);
+}
+
+
+void * socket_handler(void *arg)
+{
+
+	char client_message[BUF_SIZE];
+	int len = 0;
+	int clientSocket = *((int *)arg);
+	fprintf(stderr, "Socket_handler started : client %x\n", 0);
+	while(1) {
+		len = 0;
+		if ((len = recv(clientSocket , client_message , BUF_SIZE , 0)) < 0 ) {
+			fprintf(stderr, "recv error \n");
+		} else {
+			client_message[len-1] = '\0';
+			fprintf(stderr, "MESSAGE RECEIVED: '%s'\n", client_message);
+			char response[BUF_SIZE];
+
+			for (int i=0;i<len-1;i++) {
+				response[i]=client_message[len-2-i];
+			}
+			response[len-1] = '\0';
+			fprintf(stderr, "MESSAGE REPLY: '%s'\n", response);
+			response[len-1] = 0xD; //CR
+			send(clientSocket, response, len, 0);
+
+		}
+		sleep(1);
+	}
 }
 
 int main(int argc,char **argv){
@@ -109,11 +144,12 @@ int main(int argc,char **argv){
 	} // end while(1) read of arguments
 
 	if (get_config(config_file, &config) == 0) {
-		fprintf(stderr, "PORT: %d\n SERVER IP: %s\n", config.port, config.server_ip);
+		fprintf(stderr, "PORT: %d\nSERVER IP: %s\n", config.port, config.server_ip);
 	} else {
 		fprintf(stderr, "Error opening config file -> using default values(IP: %s PORT: %d).",
                DEFAULT_SERVER_IP, DEFAULT_PORT);
 	}
+
 	if(daemonize_flag)
 		daemonize();
 
@@ -125,7 +161,7 @@ int main(int argc,char **argv){
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
 	if (sockfd < 0) {
-		fprintf(stderr, "ERROR opening socket");
+		fprintf(stderr, "ERROR opening socket\n");
 		exit(1);
 	}
 
@@ -133,12 +169,12 @@ int main(int argc,char **argv){
 	bzero((char *) &serv_addr, sizeof(serv_addr));
 
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_addr.s_addr = inet_addr(config.server_ip);
+	serv_addr.sin_addr.s_addr = INADDR_ANY; //inet_addr(config.server_ip);
 	serv_addr.sin_port = htons(config.port);
 
 	/* Now bind the host address using bind() call.*/
 	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-		fprintf(stderr, "ERROR on binding");
+		fprintf(stderr, "ERROR on binding\n");
 		exit(1);
 	}
 
@@ -146,15 +182,31 @@ int main(int argc,char **argv){
 		fprintf(stderr, "ERROR on listen\n");
 	}
 
-	while(1) {
-		clientsockfd = accept(sockfd, (struct sockaddr *) &client_addr, &client_add_len);
+	pthread_t tid[MAX_CONNECTIONS];
+	int nr_of_threads = 0;
 
-		if (clientsockfd < 0) {
-			fprintf(stderr, "ERROR on accept");
-			exit(1);
+	while(1) {
+
+		if(nr_of_threads < MAX_CONNECTIONS) {
+
+			clientsockfd = accept(sockfd, (struct sockaddr *) &client_addr, &client_add_len);
+
+			if (clientsockfd < 0) {
+				fprintf(stderr, "ERROR on accept");
+				continue;
+			}
+
+			fprintf(stderr, "Start thread for client %x\n", clientsockfd);
+			if( pthread_create(&tid[nr_of_threads], NULL, socket_handler, &clientsockfd) != 0 )
+				fprintf(stderr, "Failed to create thread\n");
+
+			pthread_join(tid[nr_of_threads],NULL);
+			nr_of_threads++;
 		}
+
 		sleep(1);
 	}
+
 	return 0;
 }
 
