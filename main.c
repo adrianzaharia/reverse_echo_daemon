@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <getopt.h>
 
 #include "config.h"
 
@@ -66,17 +67,57 @@ void daemonize(){
 
 int main(int argc,char **argv){
 
+	int c;
+	static int daemonize_flag = 0;
+	char config_file[BUF_SIZE];
 	config_t config;
 
-	if (get_config("reverse_echo.conf", &config) == 0) {
+	strncpy(config_file, DEFAULT_CONFIG_FILENAME, BUF_SIZE);
+
+	while (1) {
+	  static struct option long_options[] =
+		{
+		  /* These options set a flag. */
+		  {"daemon", no_argument,       &daemonize_flag, 1},
+		  {"config",  required_argument, 0, 'c'},
+		  {0, 0, 0, 0}
+		};
+	  /* getopt_long stores the option index here. */
+	  int option_index = 0;
+
+	  c = getopt_long (argc, argv, "dc::", long_options, &option_index);
+
+	  /* Detect the end of the options. */
+	  if (c == -1)
+		break;
+
+	  switch (c)
+		{
+
+		case 'c':
+		  strncpy(config_file, optarg, BUF_SIZE);
+		  break;
+
+
+		case '?':
+		  /* getopt_long already printed an error message. */
+		  break;
+
+		default:
+		  exit (1);
+		}
+	} // end while(1) read of arguments
+
+	if (get_config(config_file, &config) == 0) {
 		printf ("PORT: %d\n SERVER IP: %s\n", config.port, config.server_ip);
 	} else {
 		printf("Error opening config file -> using default values(IP: %s PORT: %d).",
                DEFAULT_SERVER_IP, DEFAULT_PORT);
 	}
-return 0;
-	daemonize();
+	if(daemonize_flag)
+		daemonize();
 	while(1)
 		sleep(1);
+	return 0;
 }
 
