@@ -6,7 +6,11 @@
 #include <string.h>
 #include <getopt.h>
 
+#include <netinet/in.h>
+
 #include "config.h"
+
+#define MAX_CONNECTIONS 10
 
 #define LOCK_FILE "/tmp/reverse_echo.lock"
 
@@ -82,23 +86,19 @@ int main(int argc,char **argv){
 		  {"config",  required_argument, 0, 'c'},
 		  {0, 0, 0, 0}
 		};
-	  /* getopt_long stores the option index here. */
-	  int option_index = 0;
+	/* getopt_long stores the option index here. */
+	int option_index = 0;
 
-	  c = getopt_long (argc, argv, "dc::", long_options, &option_index);
+	c = getopt_long (argc, argv, "dc::", long_options, &option_index);
 
-	  /* Detect the end of the options. */
-	  if (c == -1)
+	/* Detect the end of the options. */
+	if (c == -1)
 		break;
 
-	  switch (c)
-		{
-
+	switch (c) {
 		case 'c':
 		  strncpy(config_file, optarg, BUF_SIZE);
 		  break;
-
-
 		case '?':
 		  /* getopt_long already printed an error message. */
 		  break;
@@ -109,15 +109,52 @@ int main(int argc,char **argv){
 	} // end while(1) read of arguments
 
 	if (get_config(config_file, &config) == 0) {
-		printf ("PORT: %d\n SERVER IP: %s\n", config.port, config.server_ip);
+		fprintf(stderr, "PORT: %d\n SERVER IP: %s\n", config.port, config.server_ip);
 	} else {
-		printf("Error opening config file -> using default values(IP: %s PORT: %d).",
+		fprintf(stderr, "Error opening config file -> using default values(IP: %s PORT: %d).",
                DEFAULT_SERVER_IP, DEFAULT_PORT);
 	}
 	if(daemonize_flag)
 		daemonize();
-	while(1)
+
+	/* server connection */
+	int sockfd, clientsockfd;
+	struct sockaddr_in serv_addr, client_addr;
+	int client_add_len = sizeof(client_addr);
+
+	sockfd = socket(AF_INET, SOCK_STREAM, 0);
+
+	if (sockfd < 0) {
+		fprintf(stderr, "ERROR opening socket");
+		exit(1);
+	}
+
+	/* Initialize socket structure */
+	bzero((char *) &serv_addr, sizeof(serv_addr));
+
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_addr.s_addr = inet_addr(config.server_ip);
+	serv_addr.sin_port = htons(config.port);
+
+	/* Now bind the host address using bind() call.*/
+	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
+		fprintf(stderr, "ERROR on binding");
+		exit(1);
+	}
+
+	if(listen(sockfd, MAX_CONNECTIONS) < 0) {
+		fprintf(stderr, "ERROR on listen\n");
+	}
+
+	while(1) {
+		clientsockfd = accept(sockfd, (struct sockaddr *) &client_addr, &client_add_len);
+
+		if (clientsockfd < 0) {
+			fprintf(stderr, "ERROR on accept");
+			exit(1);
+		}
 		sleep(1);
+	}
 	return 0;
 }
 
