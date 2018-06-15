@@ -5,63 +5,78 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "config.h"
+
 #define LOCK_FILE "/tmp/reverse_echo.lock"
 
 int file_lock(int p_cmd) {
-    int p_lock;
-    char str[10];
-    p_lock = open(LOCK_FILE,O_RDWR|O_CREAT,0640);
-    if(p_lock < 0)
-        return 1;
-    if(lockf(p_lock,p_cmd,0) < 0)
-        return 1;
+	int p_lock;
+	char str[10];
 
-    switch (p_cmd) {
+	p_lock = open(LOCK_FILE,O_RDWR|O_CREAT,0640);
+	if(p_lock < 0)
+		return 1;
+	if(lockf(p_lock,p_cmd,0) < 0)
+		return 1;
+
+	switch (p_cmd) {
 	case F_TLOCK:
-	    /* write pid in lock file*/
-	    sprintf(str,"%d\n",getpid());
-	    write(p_lock,str,strlen(str));
-	    break;
+		/* write pid in lock file*/
+		sprintf(str,"%d\n",getpid());
+		write(p_lock,str,strlen(str));
+		break;
 	case F_ULOCK:
-	    /* close and remove lock file */
-	    close(p_lock);
-	    remove(LOCK_FILE);
-	    break;
-    }
-    return 0;
+		/* close and remove lock file */
+		close(p_lock);
+		remove(LOCK_FILE);
+		break;
+	default:
+		return 2;
+	}
+	return 0;
 }
 
 void signal_handler(int sig){
-    switch(sig){
+	switch(sig){
 	case SIGTERM:
-	    exit(file_lock(F_ULOCK));
-	    break;
-    }
+		exit(file_lock(F_ULOCK));
+		break;
+	}
 }
 
 void daemonize(){
-    int pid;
-    char str[10];
-    if(getppid() == 1)
-        return;
-    pid = fork();
+	int pid;
+	char str[10];
+	if(getppid() == 1)
+		return;
+	pid = fork();
 
-    if(pid < 0)
-        exit(1);
-    /* fork success. exit parent */
-    if(pid > 0)
-        exit(0);
-    setsid();
+	if(pid < 0)
+		exit(1);
+	/* fork success. exit parent */
+	if(pid > 0)
+		exit(0);
+	setsid();
 
-    if(file_lock(F_TLOCK) != 0)
-        exit(1);
+	if(file_lock(F_TLOCK) != 0)
+		exit(1);
 
-    signal(SIGTERM,signal_handler);
+	signal(SIGTERM,signal_handler);
 }
 
 int main(int argc,char **argv){
-    daemonize();
-    while(1)
-        sleep(1);
+
+	config_t config;
+
+	if (get_config("reverse_echo.conf", &config) == 0) {
+		printf ("PORT: %d\n SERVER IP: %s\n", config.port, config.server_ip);
+	} else {
+		printf("Error opening config file -> using default values(IP: %s PORT: %d).",
+               DEFAULT_SERVER_IP, DEFAULT_PORT);
+	}
+return 0;
+	daemonize();
+	while(1)
+		sleep(1);
 }
 
